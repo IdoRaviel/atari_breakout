@@ -31,9 +31,11 @@ class AtariPreprocessing(gym.Wrapper):
         # 3. Transform pixels from (210, 160, 3) RGB to (84, 84) Grayscale
         obs = self._preprocess(obs)
         
-        # 4. Standard DQN Reward Clipping: All positive points = +1
+        # 4. Reward shaping: sqrt normalization preserves relative brick value
+        #    (red/orange=7pts, yellow/green=4pts, aqua/blue=1pt) -> range [0, 1]
+        #    instead of paper's clipping which treats all bricks equally
         if self.clip_reward:
-            reward = np.sign(reward)
+            reward = np.sqrt(reward) / np.sqrt(7) if reward > 0 else reward
         
         return obs, reward, terminated, truncated, info
 

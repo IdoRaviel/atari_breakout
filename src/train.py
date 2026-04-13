@@ -1,4 +1,5 @@
 import os
+import json
 import torch
 import numpy as np
 import pandas as pd
@@ -58,12 +59,62 @@ def compute_avg_q(agent, held_out_states):
     return max_q.mean().item()
 
 
-def train(resume_path=None, start_frame=1):
+def save_run_config(log_dir, run_number=None):
+    config = {
+        "run_number": run_number,
+        "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "game": "BreakoutNoFrameskip-v4",
+        "hyperparameters": {
+            "epsilon_start": EPSILON_START,
+            "epsilon_final": EPSILON_FINAL,
+            "final_exploration_step": FINAL_EXPLORATION_STEP,
+            "batch_size": BATCH_SIZE,
+            "replay_start_size": REPLAY_START_SIZE,
+            "gamma": GAMMA,
+            "target_update_freq": TARGET_UPDATE_FREQ,
+            "learning_rate": LR,
+            "memory_capacity": MEMORY_CAPACITY,
+            "max_steps": MAX_STEPS,
+            "total_steps": TOTAL_STEPS,
+        },
+        "architecture": {
+            "input_shape": [4, 84, 84],
+            "conv1": "32 filters, 8x8, stride 4",
+            "conv2": "64 filters, 4x4, stride 2",
+            "conv3": "64 filters, 3x3, stride 1",
+            "fc": "512 units",
+            "optimizer": "RMSprop(lr=0.00025, alpha=0.95, eps=0.01)",
+            "loss": "Huber (smooth_l1)",
+        },
+        "preprocessing": {
+            "frame_skip": 4,
+            "frame_stack": 4,
+            "grayscale": True,
+            "resize": "110x84 -> crop 84x84",
+            "normalize": "divide by 255",
+            "reward_shaping": "sqrt(r) / sqrt(7)",
+            "life_loss_as_terminal": True,
+        },
+        "evaluation": {
+            "eval_freq_steps": EVAL_FREQ,
+            "eval_episodes": 3,
+            "eval_epsilon": 0.05,
+            "held_out_states": HELD_OUT_SIZE,
+        },
+        "device": str(DEVICE),
+    }
+    with open(os.path.join(log_dir, "config.json"), "w") as f:
+        json.dump(config, f, indent=2)
+
+
+def train(resume_path=None, start_frame=1, run_number=None):
     # Create timestamped log directory
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    log_dir = os.path.join("logs", f"run_{timestamp}")
+    run_label = f"run{run_number}_" if run_number else ""
+    log_dir = os.path.join("logs", f"{run_label}{timestamp}")
     os.makedirs(log_dir, exist_ok=True)
     print(f"Logging to: {log_dir}")
+    save_run_config(log_dir, run_number)
 
     env = make_env()
     n_actions = env.action_space.n
@@ -159,6 +210,7 @@ if __name__ == "__main__":
         "--resume", type=str, help="Path to checkpoint .pth file", default=None
     )
     parser.add_argument("--frame", type=int, help="Frame to start from", default=1)
+    parser.add_argument("--run", type=int, help="Run number (1, 2, 3)", default=None)
     args = parser.parse_args()
 
-    train(resume_path=args.resume, start_frame=args.frame)
+    train(resume_path=args.resume, start_frame=args.frame, run_number=args.run)
