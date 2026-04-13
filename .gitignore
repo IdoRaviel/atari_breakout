@@ -1,0 +1,29 @@
+# Virtual Environment
+venv/
+.env
+.venv
+env/
+dqn_breakout/
+
+# Conda
+.conda/
+miniconda3/
+
+# Logs and Checkpoints
+logs/
+*.pth
+training_stats.csv
+cartpole/
+cartpole_model.pth
+GEMINI.md
+CLAUDE.md
+*.pdf
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# OS Files
+.DS_Store
+Thumbs.db
