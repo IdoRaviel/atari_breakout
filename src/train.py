@@ -107,14 +107,13 @@ def save_run_config(log_dir, run_number=None):
         json.dump(config, f, indent=2)
 
 
-def train(resume_path=None, start_frame=1, run_number=None, no_eval=False):
-    # Exploratory runs (--no-eval) go to logs/, official runs go to results/
+def train(resume_path=None, start_frame=1, run_number=None):
+    # Create timestamped log directory
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     run_label = f"run{run_number}_" if run_number else ""
-    base_dir = "logs" if no_eval else "results"
-    log_dir = os.path.join(base_dir, f"{run_label}{timestamp}")
+    log_dir = os.path.join("logs", f"{run_label}{timestamp}")
     os.makedirs(log_dir, exist_ok=True)
-    print(f"{'[EXPLORATORY]' if no_eval else '[OFFICIAL]'} Logging to: {log_dir}")
+    print(f"Logging to: {log_dir}")
     save_run_config(log_dir, run_number)
 
     env = make_env()
@@ -182,24 +181,21 @@ def train(resume_path=None, start_frame=1, run_number=None, no_eval=False):
             obs, info = env.reset()
 
         if step_idx % EVAL_FREQ == 0:
-            if no_eval:
-                print(f"Step {step_idx}: Epsilon {epsilon:.4f}")
-            else:
-                avg_reward = evaluate(agent)
-                avg_q = (
-                    compute_avg_q(agent, held_out_states)
-                    if held_out_states is not None
-                    else None
-                )
-                print(
-                    f"Step {step_idx}: Epsilon {epsilon:.4f}, Eval Reward: {avg_reward:.2f}, Avg Q: {avg_q:.4f}"
-                    if avg_q is not None
-                    else f"Step {step_idx}: Epsilon {epsilon:.4f}, Eval Reward: {avg_reward:.2f}"
-                )
-                stats.append({"step": step_idx, "reward": avg_reward, "avg_q": avg_q})
+            avg_reward = evaluate(agent)
+            avg_q = (
+                compute_avg_q(agent, held_out_states)
+                if held_out_states is not None
+                else None
+            )
+            print(
+                f"Step {step_idx}: Epsilon {epsilon:.4f}, Eval Reward: {avg_reward:.2f}, Avg Q: {avg_q:.4f}"
+                if avg_q is not None
+                else f"Step {step_idx}: Epsilon {epsilon:.4f}, Eval Reward: {avg_reward:.2f}"
+            )
+            stats.append({"step": step_idx, "reward": avg_reward, "avg_q": avg_q})
 
-                df = pd.DataFrame(stats)
-                df.to_csv(os.path.join(log_dir, "training_stats.csv"), index=False)
+            df = pd.DataFrame(stats)
+            df.to_csv(os.path.join(log_dir, "training_stats.csv"), index=False)
 
             torch.save(
                 agent.policy_net.state_dict(), os.path.join(log_dir, "dqn_breakout.pth")
@@ -215,7 +211,6 @@ if __name__ == "__main__":
     )
     parser.add_argument("--frame", type=int, help="Frame to start from", default=1)
     parser.add_argument("--run", type=int, help="Run number (1, 2, 3)", default=None)
-    parser.add_argument("--no-eval", action="store_true", help="Skip evaluation (exploratory run)")
     args = parser.parse_args()
 
-    train(resume_path=args.resume, start_frame=args.frame, run_number=args.run, no_eval=args.no_eval)
+    train(resume_path=args.resume, start_frame=args.frame, run_number=args.run)
