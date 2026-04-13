@@ -17,6 +17,7 @@ cartpole/
 cartpole_model.pth
 GEMINI.md
 CLAUDE.md
+IDEAS.md
 *.pdf
 
 # Python cache
