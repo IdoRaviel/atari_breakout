@@ -52,6 +52,14 @@ def simulate(model_path):
     env.close()
 
 if __name__ == "__main__":
-    # Point to your latest saved model
-    LATEST_MODEL = "logs/20260413_121717/dqn_breakout.pth"
+    import glob
+    import os
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    logs_dir = os.path.join(script_dir, "..", "logs")
+    pth_files = glob.glob(os.path.join(logs_dir, "**/*.pth"), recursive=True)
+    if not pth_files:
+        print("No .pth files found in logs/")
+        exit(1)
+    LATEST_MODEL = max(pth_files, key=os.path.getmtime)
+    print(f"Using model: {LATEST_MODEL}")
     simulate(LATEST_MODEL)
