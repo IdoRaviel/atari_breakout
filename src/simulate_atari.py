@@ -1,6 +1,8 @@
+import os
 import gymnasium as gym
 import torch
 import time
+import random
 import numpy as np
 from preprocessing import make_env
 from model import DQN
@@ -18,7 +20,11 @@ def simulate(model_path):
     # 3. Load the weights
     try:
         # Map to CPU if no CUDA, or vice versa
-        model.load_state_dict(torch.load(model_path, map_location=device))
+        checkpoint = torch.load(model_path, map_location=device, weights_only=True)
+        if isinstance(checkpoint, dict):
+            model.load_state_dict(checkpoint["model_state_dict"])
+        else:
+            model.load_state_dict(checkpoint)
         model.eval()
         print(f"Model weights loaded from {model_path}")
     except FileNotFoundError:
@@ -28,16 +34,20 @@ def simulate(model_path):
     # 4. Run the simulation
     for episode in range(3):
         obs, info = env.reset()
+        obs, _, _, _, _ = env.step(1)  # FIRE to launch the ball (Breakout starts frozen)
         episode_reward = 0
         done = False
-        
+
         print(f"Starting Episode {episode + 1}")
         while not done:
             # Action selection (Greedy)
             # Obs shape is (4, 84, 84), add batch dimension -> (1, 4, 84, 84)
-            obs_tensor = torch.FloatTensor(obs).unsqueeze(0).to(device)
-            with torch.no_grad():
-                action = model(obs_tensor).argmax(dim=1).item()
+            if random.random() < 0.05:
+                action = env.action_space.sample()
+            else:
+                obs_tensor = torch.from_numpy(obs.astype(np.float32) / 255.0).unsqueeze(0).to(device)
+                with torch.no_grad():
+                    action = model(obs_tensor).argmax(dim=1).item()
 
             obs, reward, terminated, truncated, info = env.step(action)
             episode_reward += reward
@@ -53,13 +63,20 @@ def simulate(model_path):
 
 if __name__ == "__main__":
     import glob
-    import os
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    logs_dir = os.path.join(script_dir, "..", "logs")
-    pth_files = glob.glob(os.path.join(logs_dir, "**/*.pth"), recursive=True)
-    if not pth_files:
-        print("No .pth files found in logs/")
-        exit(1)
-    LATEST_MODEL = max(pth_files, key=os.path.getmtime)
-    print(f"Using model: {LATEST_MODEL}")
-    simulate(LATEST_MODEL)
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--model", type=str, default=None, help="Path to .pth file")
+    args = parser.parse_args()
+
+    if args.model:
+        simulate(args.model)
+    else:
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        logs_dir = os.path.join(script_dir, "..", "logs")
+        pth_files = glob.glob(os.path.join(logs_dir, "**/*.pth"), recursive=True)
+        if not pth_files:
+            print("No .pth files found in logs/")
+            exit(1)
+        LATEST_MODEL = max(pth_files, key=os.path.getmtime)
+        print(f"Using model: {LATEST_MODEL}")
+        simulate(LATEST_MODEL)

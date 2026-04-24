@@ -1,120 +1,33 @@
 import os
-import json
-import torch
+import argparse
 import numpy as np
 import pandas as pd
+import torch
 from datetime import datetime
 from preprocessing import make_env
 from agent import DQNAgent
-import argparse
+from config import (
+    LR, GAMMA, TARGET_UPDATE_FREQ, MEMORY_CAPACITY, BATCH_SIZE, DEVICE,
+    REPLAY_START_SIZE, HELD_OUT_SIZE, TOTAL_STEPS, EVAL_FREQ,
+)
+from utils import evaluate, compute_avg_q, save_run_config, fill_replay_buffer
 
-# Hyperparameters
-EPSILON_START = 1.0
-EPSILON_FINAL = 0.1
-FINAL_EXPLORATION_STEP = 1_250_000  # Exploration ends at 1M env steps
-
-BATCH_SIZE = 32
-REPLAY_START_SIZE = 50_000  # Minimum replay memory size before training starts
-GAMMA = 0.99
-TARGET_UPDATE_FREQ = 10_000  # The weights form policy_net are copied to target_net every 10,000 env steps
-LR = 0.00025
-MEMORY_CAPACITY = 1_000_000
-MAX_STEPS = 12_500_000  # ~50M ALE frames (50M / frame_skip=4)
-TOTAL_STEPS = MAX_STEPS + REPLAY_START_SIZE
-EVAL_FREQ = 10_000  # Evaluate every 10,000 env steps
-HELD_OUT_SIZE = 10_000  # Number of states for avg Q-value tracking
-
-DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-
-def evaluate(agent, n_episodes=3):
-    """
-    Evaluate the agent with near-greedy policy (epsilon = 0.05).
-    """
-    env = make_env(clip_reward=False)
-    total_rewards = []
-    for _ in range(n_episodes):
-        obs, info = env.reset()
-        done = False
-        episode_reward = 0
-        while not done:
-            action = agent.select_action(obs, epsilon=0.05)
-            obs, reward, terminated, truncated, info = env.step(action)
-            done = terminated or truncated
-            episode_reward += reward
-        total_rewards.append(episode_reward)
-    env.close()
-    return np.mean(total_rewards)
-
-
-def compute_avg_q(agent, held_out_states):
-    """
-    Compute the average max Q-value over a fixed held-out set of states.
-    Tracks learning progress without the noise of episode rewards.
-    """
-    # held_out_states is already a GPU tensor — no transfer needed
-    with torch.no_grad():
-        q_values = agent.policy_net(held_out_states)  # (N, n_actions)
-        max_q = q_values.max(dim=1)[0]  # (N,)
-    return max_q.mean().item()
-
-
-def save_run_config(log_dir, run_number=None):
-    config = {
-        "run_number": run_number,
-        "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        "game": "BreakoutNoFrameskip-v4",
-        "hyperparameters": {
-            "epsilon_start": EPSILON_START,
-            "epsilon_final": EPSILON_FINAL,
-            "final_exploration_step": FINAL_EXPLORATION_STEP,
-            "batch_size": BATCH_SIZE,
-            "replay_start_size": REPLAY_START_SIZE,
-            "gamma": GAMMA,
-            "target_update_freq": TARGET_UPDATE_FREQ,
-            "learning_rate": LR,
-            "memory_capacity": MEMORY_CAPACITY,
-            "max_steps": MAX_STEPS,
-            "total_steps": TOTAL_STEPS,
-        },
-        "architecture": {
-            "input_shape": [4, 84, 84],
-            "conv1": "32 filters, 8x8, stride 4",
-            "conv2": "64 filters, 4x4, stride 2",
-            "conv3": "64 filters, 3x3, stride 1",
-            "fc": "512 units",
-            "optimizer": "RMSprop(lr=0.00025, alpha=0.95, eps=0.01)",
-            "loss": "Huber (smooth_l1)",
-        },
-        "preprocessing": {
-            "frame_skip": 4,
-            "frame_stack": 4,
-            "grayscale": True,
-            "resize": "110x84 -> crop 84x84",
-            "normalize": "divide by 255",
-            "reward_shaping": "clip to [-1, 1]",
-            "life_loss_as_terminal": True,
-        },
-        "evaluation": {
-            "eval_freq_steps": EVAL_FREQ,
-            "eval_episodes": 1,
-            "eval_epsilon": 0.05,
-            "held_out_states": HELD_OUT_SIZE,
-        },
-        "device": str(DEVICE),
-    }
-    with open(os.path.join(log_dir, "config.json"), "w") as f:
-        json.dump(config, f, indent=2)
+# Always write logs to project root/logs, regardless of where the script is run from
+ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+LOGS_DIR = os.path.join(ROOT_DIR, "logs")
 
 
 def train(resume_path=None, start_frame=1, run_number=None):
-    # Create timestamped log directory
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    run_label = f"run{run_number}_" if run_number else ""
-    log_dir = os.path.join("logs", f"{run_label}{timestamp}")
-    os.makedirs(log_dir, exist_ok=True)
-    print(f"Logging to: {log_dir}")
-    save_run_config(log_dir, run_number)
+    if resume_path and os.path.exists(resume_path):
+        log_dir = os.path.dirname(resume_path)
+        print(f"Resuming in existing log directory: {log_dir}")
+    else:
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        run_label = f"run{run_number}_" if run_number else ""
+        log_dir = os.path.join(LOGS_DIR, f"{run_label}{timestamp}")
+        os.makedirs(log_dir, exist_ok=True)
+        print(f"Logging to: {log_dir}")
+        save_run_config(log_dir, run_number)
 
     env = make_env()
     n_actions = env.action_space.n
@@ -128,32 +41,45 @@ def train(resume_path=None, start_frame=1, run_number=None):
         device=DEVICE,
     )
 
+    held_out_states = None
+    held_out_uint8 = None
+
     if resume_path and os.path.exists(resume_path):
         print(f"Resuming from checkpoint: {resume_path}")
-        agent.policy_net.load_state_dict(torch.load(resume_path, map_location=DEVICE))
+        checkpoint = torch.load(resume_path, map_location=DEVICE, weights_only=True)
+        if isinstance(checkpoint, dict):
+            agent.policy_net.load_state_dict(checkpoint["model_state_dict"])
+            agent.update_count = checkpoint.get("update_count", 0)
+            if "held_out_states" in checkpoint:
+                held_out_uint8 = checkpoint["held_out_states"].numpy()
+                held_out_states = torch.from_numpy(held_out_uint8.astype(np.float32) / 255.0).to(DEVICE)
+                print(f"Restored {HELD_OUT_SIZE} held-out states from checkpoint.")
+        else:
+            agent.policy_net.load_state_dict(checkpoint)
         agent.target_net.load_state_dict(agent.policy_net.state_dict())
         agent.steps_done = start_frame
 
     stats = []
-    # If resuming, we might want to load previous stats too
-    stats_path = (
-        os.path.join(os.path.dirname(resume_path), "training_stats.csv")
-        if resume_path
-        else None
-    )
-    if stats_path and os.path.exists(stats_path):
+    stats_csv = os.path.join(log_dir, "training_stats.csv")
+    if os.path.exists(stats_csv):
         try:
-            old_stats = pd.read_csv(stats_path)
-            stats = old_stats.to_dict("records")
+            stats = pd.read_csv(stats_csv).to_dict("records")
             print(f"Loaded {len(stats)} previous stats entries.")
         except Exception as e:
             print(f"Could not load previous stats: {e}")
 
+    if len(agent.memory) == 0:
+        fill_replay_buffer(agent.memory, env, REPLAY_START_SIZE)
+
+    if held_out_states is None:
+        idx = np.random.randint(0, len(agent.memory), size=HELD_OUT_SIZE)
+        held_out_uint8 = agent.memory.states[idx].copy()
+        held_out_states = torch.from_numpy(held_out_uint8.astype(np.float32) / 255.0).to(DEVICE)
+        print(f"Collected {HELD_OUT_SIZE} held-out states for Q-value tracking.")
+
     obs, info = env.reset()
 
     print(f"Starting training on {DEVICE} from step {start_frame}...")
-
-    held_out_states = None  # sampled once when replay buffer is ready
 
     for step_idx in range(start_frame, TOTAL_STEPS + 1):
         agent.steps_done = step_idx  # sync for epsilon schedule
@@ -166,49 +92,35 @@ def train(resume_path=None, start_frame=1, run_number=None):
         agent.memory.push(obs, action, reward, next_obs, done)
         obs = next_obs
 
-        if len(agent.memory) >= REPLAY_START_SIZE:
-            # Sample held-out states once, right when training begins
-            if held_out_states is None:
-                states, _, _, _, _ = agent.memory.sample(HELD_OUT_SIZE)
-                held_out_states = torch.from_numpy(states).to(DEVICE)  # move to GPU once, reuse every eval
-                print(
-                    f"Collected {HELD_OUT_SIZE} held-out states for Q-value tracking."
-                )
-
-            agent.update()
+        agent.update()
 
         if done:
             obs, info = env.reset()
 
         if step_idx % EVAL_FREQ == 0:
+            checkpoint_data = {
+                "model_state_dict": agent.policy_net.state_dict(),
+                "step": step_idx,
+            }
+            if held_out_uint8 is not None:
+                checkpoint_data["held_out_states"] = torch.from_numpy(held_out_uint8)
+            checkpoint_data["update_count"] = agent.update_count
+            torch.save(checkpoint_data, os.path.join(log_dir, "dqn_breakout.pth"))
+
             avg_reward = evaluate(agent, n_episodes=1)
-            avg_q = (
-                compute_avg_q(agent, held_out_states)
-                if held_out_states is not None
-                else None
-            )
-            print(
-                f"Step {step_idx}: Epsilon {epsilon:.4f}, Eval Reward: {avg_reward:.2f}, Avg Q: {avg_q:.4f}"
-                if avg_q is not None
-                else f"Step {step_idx}: Epsilon {epsilon:.4f}, Eval Reward: {avg_reward:.2f}"
-            )
+            avg_q = compute_avg_q(agent, held_out_states)
+            print(f"Step {step_idx}: Epsilon {epsilon:.4f}, Eval Reward: {avg_reward:.2f}, Avg Q: {avg_q:.4f}")
             stats.append({"step": step_idx, "reward": avg_reward, "avg_q": avg_q})
 
             df = pd.DataFrame(stats)
-            df.to_csv(os.path.join(log_dir, "training_stats.csv"), index=False)
-
-            torch.save(
-                agent.policy_net.state_dict(), os.path.join(log_dir, "dqn_breakout.pth")
-            )
+            df.to_csv(stats_csv, index=False)
 
     env.close()
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--resume", type=str, help="Path to checkpoint .pth file", default=None
-    )
+    parser.add_argument("--resume", type=str, help="Path to checkpoint .pth file", default=None)
     parser.add_argument("--frame", type=int, help="Frame to start from", default=1)
     parser.add_argument("--run", type=int, help="Run number (1, 2, 3)", default=None)
     args = parser.parse_args()

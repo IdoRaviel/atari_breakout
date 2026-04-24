@@ -4,6 +4,7 @@ import torch.optim as optim
 import numpy as np
 import random
 from model import DQN
+from config import FINAL_EXPLORATION_STEP, EPSILON_START, EPSILON_FINAL
 
 
 class ReplayMemory:
@@ -77,11 +78,10 @@ class DQNAgent:
         self.update_count = 0  # gradient updates, for target network sync
 
     def get_epsilon(self):
-        # 2015 Nature paper: linear decay 1.0 -> 0.1 over first 1M env steps
         step = self.steps_done
-        if step >= 1_000_000:
-            return 0.1
-        return 1.0 - (1.0 - 0.1) * (step / 1_000_000)
+        if step >= FINAL_EXPLORATION_STEP:
+            return EPSILON_FINAL
+        return EPSILON_START - (EPSILON_START - EPSILON_FINAL) * (step / FINAL_EXPLORATION_STEP)
 
     def select_action(self, state, epsilon):
         if random.random() < epsilon:
