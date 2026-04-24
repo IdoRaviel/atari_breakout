@@ -13,7 +13,7 @@ class AtariPreprocessing(gym.Wrapper):
     def __init__(self, env, clip_reward=True):
         super().__init__(env)
         # Define the 'processed' view the Agent will see
-        self.observation_space = Box(low=0, high=1, shape=(84, 84), dtype=np.float32)
+        self.observation_space = Box(low=0, high=255, shape=(84, 84), dtype=np.uint8)
         self.lives = 0
         self.clip_reward = clip_reward
 
@@ -52,43 +52,27 @@ class AtariPreprocessing(gym.Wrapper):
         img = cv2.resize(img, (84, 110), interpolation=cv2.INTER_AREA)
         # Crop 84x84 from the bottom playing area (removes score)
         img = img[18:102, :]
-        # 0-255 -> 0.0-1.0 for NN stability
-        img = img.astype(np.float32) / 255.0
-        return img
+        return img  # uint8 (0-255); normalization happens at sample time
 
 class FrameStack(gym.Wrapper):
-    """
-    LAYER 3 (Outer): History Wrapper.
-    Collects 1-frame outputs from AtariPreprocessing into 4-frame 'video clips'.
-    """
     def __init__(self, env, k=4):
         super().__init__(env)
         self.k = k
-        self.frames = []
         shp = env.observation_space.shape
-        # New space is (4, 84, 84)
-        self.observation_space = Box(low=0, high=1, shape=(k, *shp), dtype=np.float32)
+        self.observation_space = Box(low=0, high=255, shape=(k, *shp), dtype=np.uint8)
+        self._obs_buf = np.zeros((k, *shp), dtype=np.uint8)
 
     def reset(self, **kwargs):
         obs, info = self.env.reset(**kwargs)
-        # Start of game: fill the 'history' with 4 identical copies of the first frame
-        self.frames = [obs] * self.k
-        return self._get_obs(), info
+        for i in range(self.k):
+            self._obs_buf[i] = obs
+        return self._obs_buf.copy(), info
 
     def step(self, action):
-        # 1. Request a processed frame from Layer 2 (AtariPreprocessing)
         obs, reward, terminated, truncated, info = self.env.step(action)
-        
-        # 2. Update the Sliding Window: Remove oldest, add newest
-        self.frames.pop(0)
-        self.frames.append(obs)
-        
-        # 3. Return the full 4-frame stack to the Agent
-        return self._get_obs(), reward, terminated, truncated, info
-
-    def _get_obs(self):
-        """Combine 4 frames into a single (4, 84, 84) array."""
-        return np.stack(self.frames, axis=0)
+        self._obs_buf[:-1] = self._obs_buf[1:]  # shift frames left (drop oldest)
+        self._obs_buf[-1] = obs                  # write newest at the end
+        return self._obs_buf.copy(), reward, terminated, truncated, info
 
 def make_env(render_mode=None, clip_reward=True):
     """

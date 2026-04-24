@@ -18,8 +18,8 @@ class ReplayMemory:
         self.dones       = np.zeros((capacity,),            dtype=np.uint8)
 
     def push(self, state, action, reward, next_state, done):
-        self.states[self.pos]      = (state * 255).astype(np.uint8)
-        self.next_frames[self.pos] = (next_state[-1] * 255).astype(np.uint8)
+        self.states[self.pos]      = state        # already uint8
+        self.next_frames[self.pos] = next_state[-1]  # already uint8
         self.actions[self.pos]     = action
         self.rewards[self.pos]     = reward
         self.dones[self.pos]       = done
@@ -87,7 +87,7 @@ class DQNAgent:
         if random.random() < epsilon:
             return random.randrange(self.n_actions)
         else:
-            state = torch.FloatTensor(state).unsqueeze(0).to(self.device)
+            state = torch.from_numpy(state.astype(np.float32) / 255.0).unsqueeze(0).to(self.device, non_blocking=True)
             with torch.no_grad():
                 return self.policy_net(state).argmax(dim=1).item()
 
@@ -98,12 +98,11 @@ class DQNAgent:
         states, actions, rewards, next_states, dones = self.memory.sample(
             self.batch_size
         )
-        # Extracting the tensors and moving to device
-        states = torch.FloatTensor(states).to(self.device)
-        actions = torch.LongTensor(actions).to(self.device)
-        rewards = torch.FloatTensor(rewards).to(self.device)
-        next_states = torch.FloatTensor(next_states).to(self.device)
-        dones = torch.ByteTensor(dones).to(self.device)
+        states      = torch.from_numpy(states).to(self.device, non_blocking=True)
+        actions     = torch.from_numpy(actions).to(self.device, non_blocking=True)
+        rewards     = torch.from_numpy(rewards).to(self.device, non_blocking=True)
+        next_states = torch.from_numpy(next_states).to(self.device, non_blocking=True)
+        dones       = torch.from_numpy(dones).to(self.device, non_blocking=True)
         # Compute current Q values
         current_q = self.policy_net(states).gather(1, actions.unsqueeze(1)).squeeze(1)
         # Compute target Q values using the target network

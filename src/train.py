@@ -52,9 +52,9 @@ def compute_avg_q(agent, held_out_states):
     Compute the average max Q-value over a fixed held-out set of states.
     Tracks learning progress without the noise of episode rewards.
     """
-    states = torch.FloatTensor(held_out_states).to(agent.device)
+    # held_out_states is already a GPU tensor — no transfer needed
     with torch.no_grad():
-        q_values = agent.policy_net(states)  # (N, n_actions)
+        q_values = agent.policy_net(held_out_states)  # (N, n_actions)
         max_q = q_values.max(dim=1)[0]  # (N,)
     return max_q.mean().item()
 
@@ -97,7 +97,7 @@ def save_run_config(log_dir, run_number=None):
         },
         "evaluation": {
             "eval_freq_steps": EVAL_FREQ,
-            "eval_episodes": 3,
+            "eval_episodes": 1,
             "eval_epsilon": 0.05,
             "held_out_states": HELD_OUT_SIZE,
         },
@@ -170,7 +170,7 @@ def train(resume_path=None, start_frame=1, run_number=None):
             # Sample held-out states once, right when training begins
             if held_out_states is None:
                 states, _, _, _, _ = agent.memory.sample(HELD_OUT_SIZE)
-                held_out_states = states
+                held_out_states = torch.from_numpy(states).to(DEVICE)  # move to GPU once, reuse every eval
                 print(
                     f"Collected {HELD_OUT_SIZE} held-out states for Q-value tracking."
                 )
@@ -181,7 +181,7 @@ def train(resume_path=None, start_frame=1, run_number=None):
             obs, info = env.reset()
 
         if step_idx % EVAL_FREQ == 0:
-            avg_reward = evaluate(agent)
+            avg_reward = evaluate(agent, n_episodes=1)
             avg_q = (
                 compute_avg_q(agent, held_out_states)
                 if held_out_states is not None
