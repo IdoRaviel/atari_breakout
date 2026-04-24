@@ -35,7 +35,7 @@ class AtariPreprocessing(gym.Wrapper):
         #    (red/orange=7pts, yellow/green=4pts, aqua/blue=1pt) -> range [0, 1]
         #    instead of paper's clipping which treats all bricks equally
         if self.clip_reward:
-            reward = np.sqrt(reward) / np.sqrt(7) if reward > 0 else reward
+            reward = np.clip(reward, -1, 1)
         
         return obs, reward, terminated, truncated, info
 
