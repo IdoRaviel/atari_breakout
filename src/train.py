@@ -17,10 +17,15 @@ ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 LOGS_DIR = os.path.join(ROOT_DIR, "logs")
 
 
-def train(resume_path=None, start_frame=1, run_number=None):
+def train(resume_path=None, start_frame=1, run_number=None, log_dir_override=None):
     if resume_path and os.path.exists(resume_path):
         log_dir = os.path.dirname(resume_path)
         print(f"Resuming in existing log directory: {log_dir}")
+    elif log_dir_override:
+        log_dir = log_dir_override
+        os.makedirs(log_dir, exist_ok=True)
+        print(f"Logging to: {log_dir}")
+        save_run_config(log_dir, run_number)
     else:
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         run_label = f"run{run_number}_" if run_number else ""
@@ -123,6 +128,7 @@ if __name__ == "__main__":
     parser.add_argument("--resume", type=str, help="Path to checkpoint .pth file", default=None)
     parser.add_argument("--frame", type=int, help="Frame to start from", default=1)
     parser.add_argument("--run", type=int, help="Run number (1, 2, 3)", default=None)
+    parser.add_argument("--logdir", type=str, help="Log directory path (overrides auto-generated name)", default=None)
     args = parser.parse_args()
 
-    train(resume_path=args.resume, start_frame=args.frame, run_number=args.run)
+    train(resume_path=args.resume, start_frame=args.frame, run_number=args.run, log_dir_override=args.logdir)
