@@ -47,7 +47,7 @@ def train(resume_path=None, start_frame=1, run_number=None):
     if resume_path and os.path.exists(resume_path):
         print(f"Resuming from checkpoint: {resume_path}")
         checkpoint = torch.load(resume_path, map_location=DEVICE, weights_only=True)
-        if isinstance(checkpoint, dict):
+        if "model_state_dict" in checkpoint:
             agent.policy_net.load_state_dict(checkpoint["model_state_dict"])
             agent.update_count = checkpoint.get("update_count", 0)
             if "held_out_states" in checkpoint:

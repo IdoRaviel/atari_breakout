@@ -21,7 +21,7 @@ def simulate(model_path):
     try:
         # Map to CPU if no CUDA, or vice versa
         checkpoint = torch.load(model_path, map_location=device, weights_only=True)
-        if isinstance(checkpoint, dict):
+        if "model_state_dict" in checkpoint:
             model.load_state_dict(checkpoint["model_state_dict"])
         else:
             model.load_state_dict(checkpoint)
