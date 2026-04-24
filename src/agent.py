@@ -3,42 +3,46 @@ import torch.nn as nn
 import torch.optim as optim
 import numpy as np
 import random
-from collections import deque
 from model import DQN
 
 
 class ReplayMemory:
     def __init__(self, capacity):
-        self.buffer = deque(maxlen=capacity)
+        self.capacity = capacity
+        self.pos = 0
+        self.size = 0
+        self.states      = np.zeros((capacity, 4, 84, 84), dtype=np.uint8)
+        self.next_frames = np.zeros((capacity, 84, 84),    dtype=np.uint8)
+        self.actions     = np.zeros((capacity,),            dtype=np.int64)
+        self.rewards     = np.zeros((capacity,),            dtype=np.float32)
+        self.dones       = np.zeros((capacity,),            dtype=np.uint8)
 
     def push(self, state, action, reward, next_state, done):
-        self.buffer.append((
-            (state * 255).astype(np.uint8),
-            action, reward,
-            (next_state[-1] * 255).astype(np.uint8),  # only the newest frame
-            done,
-        ))
+        self.states[self.pos]      = (state * 255).astype(np.uint8)
+        self.next_frames[self.pos] = (next_state[-1] * 255).astype(np.uint8)
+        self.actions[self.pos]     = action
+        self.rewards[self.pos]     = reward
+        self.dones[self.pos]       = done
+        self.pos  = (self.pos + 1) % self.capacity
+        self.size = min(self.size + 1, self.capacity)
 
     def sample(self, batch_size):
-        state, action, reward, next_frame, done = zip(
-            *random.sample(self.buffer, batch_size)
-        )
-        states = np.array(state, dtype=np.float32) / 255.0           # (B, 4, 84, 84)
-        next_frames = np.array(next_frame, dtype=np.float32) / 255.0  # (B, 84, 84)
-        # next_obs shares 3 frames with obs; only the last frame is new
+        idx = np.random.randint(0, self.size, size=batch_size)
+        states      = self.states[idx].astype(np.float32) / 255.0
+        next_frames = self.next_frames[idx].astype(np.float32) / 255.0
         next_states = np.concatenate(
             [states[:, 1:], next_frames[:, np.newaxis]], axis=1
         )
         return (
             states,
-            np.array(action),
-            np.array(reward, dtype=np.float32),
+            self.actions[idx],
+            self.rewards[idx],
             next_states,
-            np.array(done, dtype=np.uint8),
+            self.dones[idx],
         )
 
     def __len__(self):
-        return len(self.buffer)
+        return self.size
 
 
 class DQNAgent:
