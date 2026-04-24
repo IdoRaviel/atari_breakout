@@ -15,19 +15,25 @@ class ReplayMemory:
         self.buffer.append((
             (state * 255).astype(np.uint8),
             action, reward,
-            (next_state * 255).astype(np.uint8),
+            (next_state[-1] * 255).astype(np.uint8),  # only the newest frame
             done,
         ))
 
     def sample(self, batch_size):
-        state, action, reward, next_state, done = zip(
+        state, action, reward, next_frame, done = zip(
             *random.sample(self.buffer, batch_size)
         )
+        states = np.array(state, dtype=np.float32) / 255.0           # (B, 4, 84, 84)
+        next_frames = np.array(next_frame, dtype=np.float32) / 255.0  # (B, 84, 84)
+        # next_obs shares 3 frames with obs; only the last frame is new
+        next_states = np.concatenate(
+            [states[:, 1:], next_frames[:, np.newaxis]], axis=1
+        )
         return (
-            np.array(state, dtype=np.float32) / 255.0,
+            states,
             np.array(action),
             np.array(reward, dtype=np.float32),
-            np.array(next_state, dtype=np.float32) / 255.0,
+            next_states,
             np.array(done, dtype=np.uint8),
         )
 
