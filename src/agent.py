@@ -12,17 +12,22 @@ class ReplayMemory:
         self.buffer = deque(maxlen=capacity)
 
     def push(self, state, action, reward, next_state, done):
-        self.buffer.append((state, action, reward, next_state, done))
+        self.buffer.append((
+            (state * 255).astype(np.uint8),
+            action, reward,
+            (next_state * 255).astype(np.uint8),
+            done,
+        ))
 
     def sample(self, batch_size):
         state, action, reward, next_state, done = zip(
             *random.sample(self.buffer, batch_size)
         )
         return (
-            np.array(state),
+            np.array(state, dtype=np.float32) / 255.0,
             np.array(action),
             np.array(reward, dtype=np.float32),
-            np.array(next_state),
+            np.array(next_state, dtype=np.float32) / 255.0,
             np.array(done, dtype=np.uint8),
         )
 

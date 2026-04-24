@@ -19,6 +19,7 @@ GEMINI.md
 CLAUDE.md
 IDEAS.md
 *.pdf
+*.sh
 
 # Python cache
 __pycache__/
