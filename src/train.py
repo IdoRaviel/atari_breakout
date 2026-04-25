@@ -55,8 +55,11 @@ def train(resume_path=None, start_frame=1, run_number=None, log_dir_override=Non
         if "model_state_dict" in checkpoint:
             agent.policy_net.load_state_dict(checkpoint["model_state_dict"])
             agent.update_count = checkpoint.get("update_count", 0)
+            if "optimizer_state_dict" in checkpoint:
+                agent.optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
+                print("Restored optimizer state from checkpoint.")
             if "held_out_states" in checkpoint:
-                held_out_uint8 = checkpoint["held_out_states"].numpy()
+                held_out_uint8 = checkpoint["held_out_states"].cpu().numpy()
                 held_out_states = torch.from_numpy(held_out_uint8.astype(np.float32) / 255.0).to(DEVICE)
                 print(f"Restored {HELD_OUT_SIZE} held-out states from checkpoint.")
         else:
@@ -105,11 +108,12 @@ def train(resume_path=None, start_frame=1, run_number=None, log_dir_override=Non
         if step_idx % EVAL_FREQ == 0:
             checkpoint_data = {
                 "model_state_dict": agent.policy_net.state_dict(),
+                "optimizer_state_dict": agent.optimizer.state_dict(),
                 "step": step_idx,
+                "update_count": agent.update_count,
             }
             if held_out_uint8 is not None:
                 checkpoint_data["held_out_states"] = torch.from_numpy(held_out_uint8)
-            checkpoint_data["update_count"] = agent.update_count
             torch.save(checkpoint_data, os.path.join(log_dir, "dqn_breakout.pth"))
 
             avg_reward = evaluate(agent, n_episodes=1)
