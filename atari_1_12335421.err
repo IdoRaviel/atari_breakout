@@ -1,0 +1,8 @@
+A.L.E: Arcade Learning Environment (version 0.11.2+ecc1138)
+[Powered by Stella]
+Traceback (most recent call last):
+  File "/home/dsi/danbute/RL/atari_breakout/src/train.py", line 134, in <module>
+    train(resume_path=args.resume, start_frame=args.frame, run_number=args.run, log_dir_override=args.logdir)
+  File "/home/dsi/danbute/RL/atari_breakout/src/train.py", line 59, in train
+    held_out_uint8 = checkpoint["held_out_states"].numpy()
+TypeError: can't convert cuda:0 device type tensor to numpy. Use Tensor.cpu() to copy the tensor to host memory first.

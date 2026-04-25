@@ -1,0 +1,9 @@
+Host: hpc2a100-01
+Job ID: 12335421
+GPUs: 
+CUDA_VISIBLE_DEVICES: 0
+Start: Sat Apr 25 01:32:21 AM IDT 2026
+Checkpoint found. Resuming from step: 1870000
+Resuming in existing log directory: logs/run1_job_12335421
+Resuming from checkpoint: logs/run1_job_12335421/dqn_breakout.pth
+End: Sat Apr 25 01:32:54 AM IDT 2026
