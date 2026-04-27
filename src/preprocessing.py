@@ -8,11 +8,11 @@ from gymnasium.spaces import Box
 class NoopResetEnv(gym.Wrapper):
     """Perform 1–noop_max random no-ops after FIRE to randomize the starting ball position.
     Placed after MaxAndSkipObservation and FireResetEnv: each no-op = 4 raw ALE frames.
-    noop_max=7 -> up to 28 raw frames, matching the paper's ~30 raw frame budget.
+    noop_max=9 -> up to 36 raw frames of start-state diversity.
     Must come after FireResetEnv so the ball is already moving during no-ops — otherwise
     no-ops on a static screen do nothing and the randomization is wasted.
     """
-    def __init__(self, env, noop_max=7):
+    def __init__(self, env, noop_max=9):
         super().__init__(env)
         self.noop_max = noop_max
 
@@ -72,11 +72,12 @@ class AtariPreprocessing(gym.Wrapper):
         # 3. Transform pixels from (210, 160, 3) RGB to (84, 84) Grayscale
         obs = self._preprocess(obs)
         
-        # 4. Reward shaping: sqrt normalization preserves relative brick value
-        #    (red/orange=7pts, yellow/green=4pts, aqua/blue=1pt) -> range [0, 1]
-        #    instead of paper's clipping which treats all bricks equally
+        # 4. Reward shaping: sqrt(r/7) preserves relative brick value
+        #    red/orange=7pts→1.0, yellow/green=4pts→0.756, aqua/blue=1pt→0.378
+        #    range [0,1] like clipping, but signal is richer (not all bricks equal).
+        #    clip_reward=False during evaluation so raw scores are comparable.
         if self.clip_reward:
-            reward = np.clip(reward, -1, 1)
+            reward = np.sqrt(reward / 7.0) if reward > 0 else 0.0
         
         return obs, reward, terminated, truncated, info
 
@@ -126,7 +127,7 @@ def make_env(render_mode=None, clip_reward=True, terminal_on_life_loss=True):
     env = gym.make("BreakoutNoFrameskip-v4", render_mode=render_mode)
     env = MaxAndSkipObservation(env, skip=4)        # action repeat: 4 raw frames per action
     env = FireResetEnv(env)                         # launch ball on reset
-    env = NoopResetEnv(env, noop_max=7)             # 1-7 no-ops while ball moves (~28 raw frames)
+    env = NoopResetEnv(env, noop_max=9)             # 1-9 no-ops while ball moves (4-36 raw frames)
     env = AtariPreprocessing(env, clip_reward=clip_reward, terminal_on_life_loss=terminal_on_life_loss)
     env = FrameStack(env, k=4)
     return env
