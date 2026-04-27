@@ -2,7 +2,7 @@
 Generate report graphs from training_stats.csv files.
 
 Usage:
-    python plot_results.py --runs logs/run1_<ts> logs/run2_<ts> logs/run3_<ts>
+    python scripts/plot_results.py --runs logs/run1_<ts> logs/run2_<ts> logs/run3_<ts>
 
 Produces:
     - report/learning_curves.png  (all 3 runs on one axes)

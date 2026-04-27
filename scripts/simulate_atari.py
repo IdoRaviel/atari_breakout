@@ -1,11 +1,17 @@
 import os
-import gymnasium as gym
-import torch
+import sys
+import glob
 import time
 import random
+import argparse
 import numpy as np
+import torch
+
+# Allow imports from src/
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 from preprocessing import make_env
-from model import DQN
+from model_factory import build_model
+
 
 def simulate(model_path):
     # 1. Create environment with human render mode
@@ -15,11 +21,10 @@ def simulate(model_path):
 
     # 2. Setup the model
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model = DQN(n_actions).to(device)
+    model = build_model(model_path, n_actions=n_actions, device=device)
 
     # 3. Load the weights
     try:
-        # Map to CPU if no CUDA, or vice versa
         checkpoint = torch.load(model_path, map_location=device, weights_only=True)
         if "model_state_dict" in checkpoint:
             model.load_state_dict(checkpoint["model_state_dict"])
@@ -39,7 +44,7 @@ def simulate(model_path):
 
         print(f"Starting Episode {episode + 1}")
         while not done:
-            # Action selection (Greedy)
+            # Action selection (epsilon-greedy, epsilon=0.05)
             # Obs shape is (4, 84, 84), add batch dimension -> (1, 4, 84, 84)
             if random.random() < 0.05:
                 action = env.action_space.sample()
@@ -51,7 +56,7 @@ def simulate(model_path):
             obs, reward, terminated, truncated, info = env.step(action)
             episode_reward += reward
             done = terminated or truncated
-            
+
             # Slow down slightly for human viewing
             time.sleep(0.01)
 
@@ -60,9 +65,8 @@ def simulate(model_path):
 
     env.close()
 
+
 if __name__ == "__main__":
-    import glob
-    import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument("--model", type=str, default=None, help="Path to .pth file")
     args = parser.parse_args()
