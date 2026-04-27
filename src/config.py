@@ -23,9 +23,6 @@ TOTAL_STEPS = MAX_STEPS  # buffer filling is outside the training loop
 # Eval every 10,000 gradient updates = 40,000 env steps (matching assignment requirement).
 # Paper evaluates every 50,000 gradient updates; we are 5x more frequent.
 EVAL_FREQ = 40_000
-# 1 minute of simulated game time = 60s × 60fps / frame_skip=4 = 900 env steps.
-# Paper uses 5 minutes; we scale down proportionally (5x more frequent evals → 1/5 duration).
-EVAL_STEPS = 900
 HELD_OUT_SIZE = 2_000  # Number of states for avg Q-value tracking
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")

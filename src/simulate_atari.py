@@ -10,7 +10,7 @@ from model import DQN
 def simulate(model_path):
     # 1. Create environment with human render mode
     # We use clip_reward=False for eval/sim to see real rewards
-    env = make_env(render_mode="human", clip_reward=False)
+    env = make_env(render_mode="human", clip_reward=False, terminal_on_life_loss=False)
     n_actions = env.action_space.n
 
     # 2. Setup the model
@@ -33,8 +33,7 @@ def simulate(model_path):
 
     # 4. Run the simulation
     for episode in range(3):
-        obs, info = env.reset()
-        obs, _, _, _, _ = env.step(1)  # FIRE to launch the ball (Breakout starts frozen)
+        obs, info = env.reset()  # FireResetEnv auto-presses FIRE on reset
         episode_reward = 0
         done = False
 

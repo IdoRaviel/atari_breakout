@@ -29,9 +29,11 @@ def fill_replay_buffer(memory, env, replay_start_size):
 
 def evaluate(agent, n_episodes=1):
     """
-    Evaluate the agent with near-greedy policy (epsilon = 0.05).
+    Evaluate the agent over n full games (all 5 lives each) with epsilon=0.05.
+    terminal_on_life_loss=False: life loss auto-injects FIRE and continues;
+    episode only ends on true game over, matching the paper's reported scores.
     """
-    env = make_env(clip_reward=False)
+    env = make_env(clip_reward=False, terminal_on_life_loss=False)
     total_rewards = []
     for _ in range(n_episodes):
         obs, info = env.reset()

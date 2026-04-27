@@ -44,22 +44,29 @@ class AtariPreprocessing(gym.Wrapper):
     LAYER 2: Image Processing Wrapper.
     Handles pixels (Grayscale, Resize, Crop) and Reward signal.
     """
-    def __init__(self, env, clip_reward=True):
+    def __init__(self, env, clip_reward=True, terminal_on_life_loss=True):
         super().__init__(env)
         # Define the 'processed' view the Agent will see
         self.observation_space = Box(low=0, high=255, shape=(84, 84), dtype=np.uint8)
         self.lives = 0
         self.clip_reward = clip_reward
+        self.terminal_on_life_loss = terminal_on_life_loss
 
     def step(self, action):
         # 1. Pass action DOWN to Layer 1 (MaxAndSkip) -> then to Raw ALE
         obs, reward, terminated, truncated, info = self.env.step(action)
-        
+
         # 2. Terminal on life loss: Force 'terminated' so Agent learns to value 'life'
         # even if the game hasn't fully ended.
         current_lives = info.get('lives', 0)
-        if current_lives < self.lives and current_lives > 0:
-            terminated = True
+        life_lost = current_lives < self.lives and current_lives > 0
+        if life_lost:
+            if self.terminal_on_life_loss:
+                # Training: treat life loss as episode end for correct TD targets.
+                terminated = True
+            else:
+                # Eval/inference: auto-inject FIRE so next ball launches without a reset.
+                obs, _, _, _, info = self.env.step(1)  # FIRE
         self.lives = current_lives
 
         # 3. Transform pixels from (210, 160, 3) RGB to (84, 84) Grayscale
@@ -108,7 +115,7 @@ class FrameStack(gym.Wrapper):
         self._obs_buf[-1] = obs                  # write newest at the end
         return self._obs_buf.copy(), reward, terminated, truncated, info
 
-def make_env(render_mode=None, clip_reward=True):
+def make_env(render_mode=None, clip_reward=True, terminal_on_life_loss=True):
     """
     Wrapper stack (inner to outer):
       Raw ALE -> MaxAndSkip -> FireReset -> NoopReset -> AtariPreprocessing -> FrameStack
@@ -120,6 +127,6 @@ def make_env(render_mode=None, clip_reward=True):
     env = MaxAndSkipObservation(env, skip=4)        # action repeat: 4 raw frames per action
     env = FireResetEnv(env)                         # launch ball on reset
     env = NoopResetEnv(env, noop_max=7)             # 1-7 no-ops while ball moves (~28 raw frames)
-    env = AtariPreprocessing(env, clip_reward=clip_reward)
+    env = AtariPreprocessing(env, clip_reward=clip_reward, terminal_on_life_loss=terminal_on_life_loss)
     env = FrameStack(env, k=4)
     return env
