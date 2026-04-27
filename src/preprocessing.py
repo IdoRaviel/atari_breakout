@@ -5,6 +5,40 @@ import numpy as np
 import cv2
 from gymnasium.spaces import Box
 
+class NoopResetEnv(gym.Wrapper):
+    """Perform 1–noop_max random no-ops after FIRE to randomize the starting ball position.
+    Placed after MaxAndSkipObservation and FireResetEnv: each no-op = 4 raw ALE frames.
+    noop_max=7 -> up to 28 raw frames, matching the paper's ~30 raw frame budget.
+    Must come after FireResetEnv so the ball is already moving during no-ops — otherwise
+    no-ops on a static screen do nothing and the randomization is wasted.
+    """
+    def __init__(self, env, noop_max=7):
+        super().__init__(env)
+        self.noop_max = noop_max
+
+    def reset(self, **kwargs):
+        obs, info = self.env.reset(**kwargs)
+        n_noops = np.random.randint(1, self.noop_max + 1)
+        for _ in range(n_noops):
+            obs, _, terminated, truncated, info = self.env.step(0)  # NOOP
+            if terminated or truncated:
+                obs, info = self.env.reset(**kwargs)
+        return obs, info
+
+
+class FireResetEnv(gym.Wrapper):
+    """Press FIRE (action 1) after every reset to launch the ball.
+    Required for Breakout: without FIRE the ball never moves and the episode stalls.
+    Placed after MaxAndSkipObservation so the FIRE action runs with frame skip applied.
+    """
+    def reset(self, **kwargs):
+        obs, info = self.env.reset(**kwargs)
+        obs, _, terminated, truncated, info = self.env.step(1)  # FIRE
+        if terminated or truncated:
+            obs, info = self.env.reset(**kwargs)
+        return obs, info
+
+
 class AtariPreprocessing(gym.Wrapper):
     """
     LAYER 2: Image Processing Wrapper.
@@ -76,19 +110,16 @@ class FrameStack(gym.Wrapper):
 
 def make_env(render_mode=None, clip_reward=True):
     """
-    THE WRAPPER ONION (Inner to Outer):
-    ALE (Raw Game) -> MaxAndSkip (L1) -> AtariPreprocessing (L2) -> FrameStack (L3)
+    Wrapper stack (inner to outer):
+      Raw ALE -> MaxAndSkip -> FireReset -> NoopReset -> AtariPreprocessing -> FrameStack
+
+    MaxAndSkip is innermost so every action (FIRE, no-op, policy) = 4 raw ALE frames.
+    FireReset launches the ball before NoopReset randomizes, so no-ops actually shift state.
     """
-    # 0. Raw ALE Environment
     env = gym.make("BreakoutNoFrameskip-v4", render_mode=render_mode)
-    
-    # 1. Action Repeat & Flicker Fix (takes 2 frames, returns 1 maxed observation)
-    env = MaxAndSkipObservation(env, skip=4)
-    
-    # 2. Custom Grayscale/Resizing/Life-Loss logic
+    env = MaxAndSkipObservation(env, skip=4)        # action repeat: 4 raw frames per action
+    env = FireResetEnv(env)                         # launch ball on reset
+    env = NoopResetEnv(env, noop_max=7)             # 1-7 no-ops while ball moves (~28 raw frames)
     env = AtariPreprocessing(env, clip_reward=clip_reward)
-    
-    # 3. Temporal stacking (Final output shape: 4x84x84)
     env = FrameStack(env, k=4)
-    
     return env

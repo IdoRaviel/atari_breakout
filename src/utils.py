@@ -8,6 +8,7 @@ from config import (
     EPSILON_START, EPSILON_FINAL, FINAL_EXPLORATION_STEP,
     BATCH_SIZE, REPLAY_START_SIZE, GAMMA, TARGET_UPDATE_FREQ,
     LR, MEMORY_CAPACITY, MAX_STEPS, TOTAL_STEPS, EVAL_FREQ, HELD_OUT_SIZE, DEVICE,
+    UPDATE_FREQ,
 )
 
 
@@ -78,20 +79,24 @@ def save_run_config(log_dir, run_number=None):
         },
         "architecture": {
             "input_shape": [4, 84, 84],
-            "conv1": "16 filters, 8x8, stride 4",
-            "conv2": "32 filters, 4x4, stride 2",
+            "conv1": "32 filters, 8x8, stride 4",
+            "conv2": "64 filters, 4x4, stride 2",
+            "conv3": "64 filters, 3x3, stride 1",
             "fc": "512 units",
             "optimizer": "RMSprop(lr=0.00025, alpha=0.95, eps=0.01)",
             "loss": "Huber (smooth_l1)",
         },
         "preprocessing": {
             "frame_skip": 4,
+            "update_frequency": UPDATE_FREQ,
             "frame_stack": 4,
             "grayscale": True,
             "resize": "110x84 -> crop 84x84",
             "normalize": "divide by 255",
             "reward_shaping": "clip to [-1, 1]",
             "life_loss_as_terminal": True,
+            "fire_reset": True,
+            "noop_reset_max_agent_steps": 7,
         },
         "evaluation": {
             "eval_freq_steps": EVAL_FREQ,

@@ -8,7 +8,7 @@ from preprocessing import make_env
 from agent import DQNAgent
 from config import (
     LR, GAMMA, TARGET_UPDATE_FREQ, MEMORY_CAPACITY, BATCH_SIZE, DEVICE,
-    REPLAY_START_SIZE, HELD_OUT_SIZE, TOTAL_STEPS, EVAL_FREQ,
+    REPLAY_START_SIZE, HELD_OUT_SIZE, TOTAL_STEPS, EVAL_FREQ, UPDATE_FREQ,
 )
 from utils import evaluate, compute_avg_q, save_run_config, fill_replay_buffer
 
@@ -100,7 +100,11 @@ def train(resume_path=None, start_frame=1, run_number=None, log_dir_override=Non
         agent.memory.push(obs, action, reward, next_obs, done)
         obs = next_obs
 
-        agent.update()
+        # Update frequency=4 (paper): one gradient update per 4 policy decisions.
+        # Each decision already covers 4 raw ALE frames (action repeat), so
+        # 1 gradient update per 16 raw frames total.
+        if step_idx % UPDATE_FREQ == 0:
+            agent.update()
 
         if done:
             obs, info = env.reset()
