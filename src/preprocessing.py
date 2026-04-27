@@ -4,6 +4,7 @@ import ale_py
 import numpy as np
 import cv2
 from gymnasium.spaces import Box
+from config import NOOP_MAX
 
 class NoopResetEnv(gym.Wrapper):
     """Perform 1–noop_max random no-ops after FIRE to randomize the starting ball position.
@@ -127,7 +128,7 @@ def make_env(render_mode=None, clip_reward=True, terminal_on_life_loss=True):
     env = gym.make("BreakoutNoFrameskip-v4", render_mode=render_mode)
     env = MaxAndSkipObservation(env, skip=4)        # action repeat: 4 raw frames per action
     env = FireResetEnv(env)                         # launch ball on reset
-    env = NoopResetEnv(env, noop_max=9)             # 1-9 no-ops while ball moves (4-36 raw frames)
+    env = NoopResetEnv(env, noop_max=NOOP_MAX)      # 1-NOOP_MAX no-ops while ball moves
     env = AtariPreprocessing(env, clip_reward=clip_reward, terminal_on_life_loss=terminal_on_life_loss)
     env = FrameStack(env, k=4)
     return env

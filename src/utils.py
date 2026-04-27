@@ -8,7 +8,7 @@ from config import (
     EPSILON_START, EPSILON_FINAL, FINAL_EXPLORATION_STEP,
     BATCH_SIZE, REPLAY_START_SIZE, GAMMA, TARGET_UPDATE_FREQ,
     LR, MEMORY_CAPACITY, MAX_STEPS, TOTAL_STEPS, EVAL_FREQ, HELD_OUT_SIZE, DEVICE,
-    UPDATE_FREQ,
+    UPDATE_FREQ, NOOP_MAX,
 )
 
 
@@ -98,7 +98,7 @@ def save_run_config(log_dir, run_number=None):
             "reward_shaping": "clip to [-1, 1]",
             "life_loss_as_terminal": True,
             "fire_reset": True,
-            "noop_reset_max_agent_steps": 7,
+            "noop_reset_max_agent_steps": NOOP_MAX,
         },
         "evaluation": {
             "eval_freq_steps": EVAL_FREQ,

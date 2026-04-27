@@ -25,5 +25,6 @@ TOTAL_STEPS = MAX_STEPS  # buffer filling is outside the training loop
 # Counted in env steps here; divide by UPDATE_FREQ=4 to get gradient update steps.
 EVAL_FREQ = 40_000  # env steps (= 10,000 gradient update steps)
 HELD_OUT_SIZE = 2_000  # Number of states for avg Q-value tracking
+NOOP_MAX = 9           # no-op actions on reset; each = 4 raw frames (4–36 raw frames total)
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
