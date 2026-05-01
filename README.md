@@ -34,6 +34,26 @@ python train.py --resume logs/<folder>/dqn_breakout.pth --frame <last_frame>
 
 ---
 
+#### Running Evaluation
+
+Evaluation requires a GPU node on the BIU Slurm cluster. Connect and request an interactive session:
+
+```bash
+ssh slurm-login1.lnx.biu.ac.il
+srun --partition=generic --gres=gpu:1 --mem=16G --time=00:30:00 --pty bash
+```
+
+Then activate the environment and run:
+
+```bash
+conda activate dqn_breakout
+python scripts/eval_checkpoint.py --model logs/<run_folder>/<checkpoint>.pth --games 30 --epsilon 0.05
+```
+
+Results are saved automatically to `logs/<run_folder>/eval_results.json`.
+
+---
+
 ## 🛠 Project Requirements
 
 - **Environment:** `BreakoutNoFrameskip-v4` via Gymnasium/ALE.
@@ -54,8 +74,15 @@ python train.py --resume logs/<folder>/dqn_breakout.pth --frame <last_frame>
 ---
 
 ## 📁 Project Structure
-- `train.py`: Main execution loop and checkpoint management.
-- `agent.py`: DQN logic, Replay Memory, and Epsilon-Greedy policy.
-- `model.py`: PyTorch CNN architecture.
-- `preprocessing.py`: Custom Gymnasium wrappers for Atari frame processing.
-- `cartpole/`: A lightweight test suite for algorithm verification.
+- `src/train.py`: Main execution loop and checkpoint management.
+- `src/agent.py`: DQN logic, Replay Memory, and Epsilon-Greedy policy.
+- `src/model.py`: PyTorch CNN architecture.
+- `src/model_factory.py`: Loads the correct model architecture from a checkpoint.
+- `src/preprocessing.py`: Custom Gymnasium wrappers for Atari frame processing.
+- `src/config.py`: Hyperparameter configuration.
+- `src/utils.py`: Shared utility functions.
+- `src/test_run.py`: Lightweight test suite for algorithm verification.
+- `scripts/eval_checkpoint.py`: Evaluates a saved checkpoint over N full games.
+- `scripts/plot_results.py`: Plots evaluation reward curves from training logs.
+- `scripts/simulate_atari.py`: Visualizes the agent playing in real time.
+- `logs/`: Training run outputs — checkpoints, metrics, and evaluation results.
