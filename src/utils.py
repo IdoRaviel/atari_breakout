@@ -96,7 +96,7 @@ def save_run_config(log_dir, run_number=None):
             "resize": "110x84 -> crop 84x84",
             "normalize": "divide by 255",
             "reward_shaping": "clip to [-1, 1]",
-            "life_loss_as_terminal": True,
+            "life_loss_as_terminal": False,
             "fire_reset": True,
             "noop_reset_max_agent_steps": 7,
         },

@@ -10,7 +10,7 @@ from datetime import datetime
 # Allow imports from src/
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 from preprocessing import make_env
-from model_factory import build_model
+from model import build_model
 
 
 def evaluate_checkpoint(model_path, n_games=30, epsilon=0.05):

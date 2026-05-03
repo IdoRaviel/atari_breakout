@@ -11,6 +11,7 @@ miniconda3/
 
 # Logs and Checkpoints
 logs/
+report/
 *.pth
 training_stats.csv
 cartpole/

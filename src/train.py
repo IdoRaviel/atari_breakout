@@ -34,7 +34,7 @@ def train(resume_path=None, start_frame=1, run_number=None, log_dir_override=Non
         print(f"Logging to: {log_dir}")
         save_run_config(log_dir, run_number)
 
-    env = make_env()
+    env = make_env(terminal_on_life_loss=False)
     n_actions = env.action_space.n
     agent = DQNAgent(
         n_actions=n_actions,
