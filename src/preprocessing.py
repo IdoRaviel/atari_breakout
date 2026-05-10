@@ -53,31 +53,32 @@ class AtariPreprocessing(gym.Wrapper):
         self.terminal_on_life_loss = terminal_on_life_loss
 
     def step(self, action):
-        # 1. Pass action DOWN to Layer 1 (MaxAndSkip) -> then to Raw ALE
         obs, reward, terminated, truncated, info = self.env.step(action)
 
-        # 2. Terminal on life loss: Force 'terminated' so Agent learns to value 'life'
-        # even if the game hasn't fully ended.
+        # Life-loss handling: only triggers on a non-final life loss
+        # (current_lives > 0 guards against the true game-over, which the engine
+        # already marks as terminated=True).
         current_lives = info.get('lives', 0)
         life_lost = current_lives < self.lives and current_lives > 0
         if life_lost:
             if self.terminal_on_life_loss:
-                # Training: treat life loss as episode end for correct TD targets.
+                # Treat life loss as a terminal signal so the TD target is not
+                # bootstrapped across life boundaries. Not used in current training.
                 terminated = True
             else:
-                # Eval/inference: auto-inject FIRE so next ball launches without a reset.
+                # Auto-inject FIRE so the next ball launches immediately.
+                # Without this the game stalls waiting for a manual FIRE press,
+                # and the agent would observe a frozen screen between lives.
                 obs, _, _, _, info = self.env.step(1)  # FIRE
         self.lives = current_lives
 
-        # 3. Transform pixels from (210, 160, 3) RGB to (84, 84) Grayscale
         obs = self._preprocess(obs)
-        
-        # 4. Reward shaping: sqrt normalization preserves relative brick value
-        #    (red/orange=7pts, yellow/green=4pts, aqua/blue=1pt) -> range [0, 1]
-        #    instead of paper's clipping which treats all bricks equally
+
+        # Clip reward to [-1, 1] so all brick values are treated equally
+        # and gradients stay in a consistent scale across games.
         if self.clip_reward:
             reward = np.clip(reward, -1, 1)
-        
+
         return obs, reward, terminated, truncated, info
 
     def reset(self, **kwargs):
