@@ -12,7 +12,6 @@ miniconda3/
 # Logs and Checkpoints
 logs/
 report/
-*.pth
 training_stats.csv
 cartpole/
 cartpole_model.pth
@@ -21,6 +20,8 @@ CLAUDE.md
 IDEAS.md
 *.pdf
 *.sh
+*.err
+*.out
 
 # Python cache
 __pycache__/
