@@ -14,16 +14,13 @@ from model import build_model
 
 
 def simulate(model_path):
-    # 1. Create environment with human render mode
-    # We use clip_reward=False for eval/sim to see real rewards
+    # clip_reward=False to display real game scores during simulation
     env = make_env(render_mode="human", clip_reward=False, terminal_on_life_loss=False)
     n_actions = env.action_space.n
 
-    # 2. Setup the model
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = build_model(model_path, n_actions=n_actions, device=device)
 
-    # 3. Load the weights
     try:
         checkpoint = torch.load(model_path, map_location=device, weights_only=True)
         if "model_state_dict" in checkpoint:
@@ -36,16 +33,13 @@ def simulate(model_path):
         print(f"Error: {model_path} not found.")
         return
 
-    # 4. Run the simulation
     for episode in range(3):
-        obs, info = env.reset()  # FireResetEnv auto-presses FIRE on reset
+        obs, info = env.reset()
         episode_reward = 0
         done = False
 
         print(f"Starting Episode {episode + 1}")
         while not done:
-            # Action selection (epsilon-greedy, epsilon=0.05)
-            # Obs shape is (4, 84, 84), add batch dimension -> (1, 4, 84, 84)
             if random.random() < 0.05:
                 action = env.action_space.sample()
             else:

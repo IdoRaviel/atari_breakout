@@ -1,25 +1,38 @@
 # DQN Breakout - From Scratch
 
-A PyTorch implementation of the Deep Q-Network (DQN) agent for the Atari game **Breakout**, built from scratch without RL libraries. This project follows the architecture and preprocessing standards established in the 2013 Nature paper, *Playing Atari with Deep Reinforcement Learning*.
+A PyTorch implementation of the Deep Q-Network (DQN) agent for the Atari game **Breakout**, built from scratch without RL libraries. This project follows the architecture and preprocessing standards established in the 2015 Nature paper, *Playing Atari with Deep Reinforcement Learning*.
+
+<p align="center">
+  <img src="demo/breakout.gif" alt="Trained DQN agent playing Breakout" width="320">
+</p>
 
 ---
 
 ## 🚀 Getting Started
 
 ### Prerequisites
-- [Miniconda](https://docs.conda.io/en/latest/miniconda.html) or Anaconda
-- NVIDIA GPU with CUDA (recommended for 22M frame training)
+- Python 3.10
+- NVIDIA GPU with CUDA (recommended for training; CPU works for simulation)
 
 ### Installation
-1. Create the environment:
-   ```bash
-   conda create -n dqn_breakout python=3.10 -y
-   conda activate dqn_breakout
-   ```
-2. Install dependencies:
-   ```bash
-   pip install gymnasium[atari,accept-rom-license] ale-py torch torchvision torchaudio matplotlib pandas opencv-python
-   ```
+
+**Option 1: Conda (Linux / server)**
+```bash
+conda create -n dqn_breakout python=3.10 -y
+conda activate dqn_breakout
+pip install torch torchvision --index-url https://download.pytorch.org/whl/cu118
+pip install gymnasium[atari] ale-py opencv-python numpy pandas matplotlib
+```
+
+**Option 2: venv (Windows)**
+```powershell
+python -m venv venv
+venv\Scripts\activate
+pip install torch torchvision --index-url https://download.pytorch.org/whl/cu118
+pip install gymnasium[atari] ale-py opencv-python numpy pandas matplotlib
+```
+
+> For CPU-only (no GPU): replace the torch line with `pip install torch torchvision`
 
 ### Running Training
 To start a new training run:
@@ -34,55 +47,38 @@ python train.py --resume logs/<folder>/dqn_breakout.pth --frame <last_frame>
 
 ---
 
-#### Running Evaluation
+### Running the Pretrained Model
 
-Evaluation requires a GPU node on the BIU Slurm cluster. Connect and request an interactive session:
-
+A pretrained checkpoint is included in `model/`. To watch it play:
 ```bash
-ssh slurm-login1.lnx.biu.ac.il
-srun --partition=generic --gres=gpu:1 --mem=16G --time=00:30:00 --pty bash
+python scripts/simulate_atari.py --model model/dqn_breakout.pth
 ```
 
-Then activate the environment and run:
-
+To evaluate it over 30 games (ε=0.05, matching the paper's protocol):
 ```bash
-conda activate dqn_breakout
-python scripts/eval_checkpoint.py --model logs/<run_folder>/<checkpoint>.pth --games 30 --epsilon 0.05
+python scripts/eval_checkpoint.py --model model/dqn_breakout.pth
 ```
 
-Results are saved automatically to `logs/<run_folder>/eval_results.json`.
+Results are saved to `model/eval_results.json`.
 
----
-
-## 🛠 Project Requirements
-
-- **Environment:** `BreakoutNoFrameskip-v4` via Gymnasium/ALE.
-- **Architecture:** 
-  - 2 Convolutional layers (8x8 stride 4, 4x4 stride 2)
-  - 1 Fully Connected layer (256 units)
-- **Preprocessing:**
-  - Grayscale conversion & 84x84 cropping.
-  - Frame stacking (last 4 frames) to capture motion.
-  - Reward clipping to `{-1, 0, +1}` for stability.
-  - Termination on life loss (training signal).
-- **Hyperparameters:**
-  - Optimizer: RMSProp
-  - Replay Memory: 1,000,000 capacity
-  - Epsilon Schedule: Two-phase linear decay (0.147 -> 0.1 -> 0.01)
-  - Target Network Update: Every 2,500 steps.
 
 ---
 
 ## 📁 Project Structure
-- `src/train.py`: Main execution loop and checkpoint management.
-- `src/agent.py`: DQN logic, Replay Memory, and Epsilon-Greedy policy.
-- `src/model.py`: PyTorch CNN architecture.
-- `src/model_factory.py`: Loads the correct model architecture from a checkpoint.
-- `src/preprocessing.py`: Custom Gymnasium wrappers for Atari frame processing.
-- `src/config.py`: Hyperparameter configuration.
-- `src/utils.py`: Shared utility functions.
-- `src/test_run.py`: Lightweight test suite for algorithm verification.
-- `scripts/eval_checkpoint.py`: Evaluates a saved checkpoint over N full games.
-- `scripts/plot_results.py`: Plots evaluation reward curves from training logs.
-- `scripts/simulate_atari.py`: Visualizes the agent playing in real time.
-- `logs/`: Training run outputs — checkpoints, metrics, and evaluation results.
+```
+.
+├── model/
+│   ├── dqn_breakout.pth       # Pretrained checkpoint
+│   ├── config.json            # Training configuration
+│   └── eval_results.json      # Evaluation results (30 games)
+├── src/
+│   ├── train.py               # Main training loop and checkpoint management
+│   ├── agent.py               # DQNAgent, ReplayMemory, epsilon-greedy policy
+│   ├── model.py               # CNN architecture (2015 Nature DQN)
+│   ├── preprocessing.py       # Gymnasium wrappers for Atari preprocessing
+│   ├── config.py              # Hyperparameters
+│   └── utils.py               # Shared utility functions
+└── scripts/
+    ├── eval_checkpoint.py     # Evaluate a checkpoint over N full games
+    └── simulate_atari.py      # Watch the agent play in real time
+```

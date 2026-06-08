@@ -19,10 +19,16 @@ GEMINI.md
 CLAUDE.md
 IDEAS.md
 *.pdf
+!DQN_Breakout_Report.pdf
 *.sh
 *.zip
 *.err
 *.out
+
+# Local-only scripts
+scripts/record_video.py
+scripts/plot_results.py
+scripts/plot_eval.py
 
 # Python cache
 __pycache__/

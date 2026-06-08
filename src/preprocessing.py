@@ -41,8 +41,8 @@ class FireResetEnv(gym.Wrapper):
 
 class AtariPreprocessing(gym.Wrapper):
     """
-    LAYER 2: Image Processing Wrapper.
-    Handles pixels (Grayscale, Resize, Crop) and Reward signal.
+    Converts raw ALE frames to 84×84 grayscale and optionally clips rewards.
+    Also handles life-loss signaling and auto-FIRE between lives.
     """
     def __init__(self, env, clip_reward=True, terminal_on_life_loss=True):
         super().__init__(env)
@@ -87,7 +87,7 @@ class AtariPreprocessing(gym.Wrapper):
         return self._preprocess(obs), info
 
     def _preprocess(self, frame):
-        """Math for reducing Atari complexity."""
+        """Grayscale, resize to 110×84, and crop to the 84×84 game area (removes score bar)."""
         # RGB -> Gray
         img = cv2.cvtColor(frame, cv2.COLOR_RGB2GRAY)
         # Downsample to 110x84
@@ -97,6 +97,7 @@ class AtariPreprocessing(gym.Wrapper):
         return img  # uint8 (0-255); normalization happens at sample time
 
 class FrameStack(gym.Wrapper):
+    """Stacks the last k frames into a single (k, H, W) observation for temporal context."""
     def __init__(self, env, k=4):
         super().__init__(env)
         self.k = k
