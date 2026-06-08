@@ -18,6 +18,9 @@ LOGS_DIR = os.path.join(ROOT_DIR, "logs")
 
 
 def train(resume_path=None, start_frame=1, run_number=None, log_dir_override=None):
+    # --- Log directory ---
+    # Resume: reuse the existing run's directory so stats and checkpoints stay together.
+    # New run: create a timestamped subdirectory and write config.json.
     if resume_path and os.path.exists(resume_path):
         log_dir = os.path.dirname(resume_path)
         print(f"Resuming in existing log directory: {log_dir}")
@@ -49,6 +52,10 @@ def train(resume_path=None, start_frame=1, run_number=None, log_dir_override=Non
     held_out_states = None
     held_out_uint8 = None
 
+    # --- Checkpoint restore ---
+    # Restores weights, optimizer state (momentum/variance accumulators), gradient
+    # update count (for target net sync), and the held-out states (so Q tracking
+    # is consistent across resume boundaries).
     if resume_path and os.path.exists(resume_path):
         print(f"Resuming from checkpoint: {resume_path}")
         checkpoint = torch.load(resume_path, map_location=DEVICE, weights_only=True)
@@ -67,6 +74,9 @@ def train(resume_path=None, start_frame=1, run_number=None, log_dir_override=Non
         agent.target_net.load_state_dict(agent.policy_net.state_dict())
         agent.steps_done = start_frame
 
+    # --- Stats CSV ---
+    # Appended every EVAL_FREQ steps. Loaded on resume so the full training curve
+    # is preserved in one file across multiple runs.
     stats = []
     stats_csv = os.path.join(log_dir, "training_stats.csv")
     if os.path.exists(stats_csv):
@@ -76,9 +86,16 @@ def train(resume_path=None, start_frame=1, run_number=None, log_dir_override=Non
         except Exception as e:
             print(f"Could not load previous stats: {e}")
 
+    # --- Replay buffer warm-up ---
+    # Fill the buffer with random transitions before training starts so the first
+    # batches are not all correlated with the initial state distribution.
     if len(agent.memory) == 0:
         fill_replay_buffer(agent.memory, env, REPLAY_START_SIZE)
 
+    # --- Held-out states for Q tracking ---
+    # A fixed set of states sampled once from the replay buffer and never updated.
+    # avg max-Q over this set is a low-noise proxy for learning progress because
+    # it is not confounded by episode length variation the way reward is.
     if held_out_states is None:
         idx = np.random.randint(0, len(agent.memory), size=HELD_OUT_SIZE)
         held_out_uint8 = agent.memory.states[idx].copy()
@@ -86,30 +103,41 @@ def train(resume_path=None, start_frame=1, run_number=None, log_dir_override=Non
         print(f"Collected {HELD_OUT_SIZE} held-out states for Q-value tracking.")
 
     obs, info = env.reset()
-
     print(f"Starting training on {DEVICE} from step {start_frame}...")
 
+    # --- Main training loop ---
+    # Each iteration = 1 env step = 4 raw ALE frames (due to action repeat).
+    # Total: TOTAL_STEPS env steps = TOTAL_STEPS * 4 raw frames.
     for step_idx in range(start_frame, TOTAL_STEPS + 1):
-        agent.steps_done = step_idx  # sync for epsilon schedule
+
+        # Epsilon decays linearly from 1.0 → 0.1 over FINAL_EXPLORATION_STEP env steps,
+        # then stays fixed. steps_done is set here so the schedule is tied to env
+        # interaction count, not gradient update count.
+        agent.steps_done = step_idx
         epsilon = agent.get_epsilon()
         action = agent.select_action(obs, epsilon)
 
         next_obs, reward, terminated, truncated, info = env.step(action)
         done = terminated or truncated
 
+        # Store the transition. done=True only on true game over (all 5 lives gone)
+        # because terminal_on_life_loss=False; life losses auto-fire and continue.
         agent.memory.push(obs, action, reward, next_obs, done)
         obs = next_obs
 
-        # Update frequency=4 (paper): one gradient update per 4 policy decisions.
-        # Each decision already covers 4 raw ALE frames (action repeat), so
-        # 1 gradient update per 16 raw frames total.
+        # Gradient update every UPDATE_FREQ env steps (paper: every 4 decisions = 16 raw frames).
+        # This decouples acting frequency from learning frequency, reducing correlation
+        # between consecutive training batches.
         if step_idx % UPDATE_FREQ == 0:
             agent.update()
 
         if done:
             obs, info = env.reset()
 
+        # --- Periodic checkpoint + evaluation ---
         if step_idx % EVAL_FREQ == 0:
+            # Save everything needed to resume: weights, optimizer, step counters,
+            # and the held-out states so Q tracking stays consistent after resume.
             checkpoint_data = {
                 "model_state_dict": agent.policy_net.state_dict(),
                 "optimizer_state_dict": agent.optimizer.state_dict(),
@@ -120,11 +148,14 @@ def train(resume_path=None, start_frame=1, run_number=None, log_dir_override=Non
                 checkpoint_data["held_out_states"] = torch.from_numpy(held_out_uint8)
             torch.save(checkpoint_data, os.path.join(log_dir, "dqn_breakout.pth"))
 
+            # Evaluate with epsilon=0.05 over 1 full game (5 lives, no life-loss terminal).
+            # Single episode during training for speed; use eval_checkpoint.py for 30-game eval.
             avg_reward = evaluate(agent, n_episodes=1)
             avg_q = compute_avg_q(agent, held_out_states)
             print(f"Step {step_idx}: Epsilon {epsilon:.4f}, Eval Reward: {avg_reward:.2f}, Avg Q: {avg_q:.4f}")
             stats.append({"step": step_idx, "reward": avg_reward, "avg_q": avg_q})
 
+            # Overwrite the CSV each time so a partial run always has a valid file.
             df = pd.DataFrame(stats)
             df.to_csv(stats_csv, index=False)
 
